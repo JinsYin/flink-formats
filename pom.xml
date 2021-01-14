@@ -39,12 +39,15 @@ under the License.
 		<jackson.verion>2.10.1-11.0</jackson.verion>
 	</properties>
 
+	<!-- mvn compile (download dependencies) -->
 	<repositories>
 	</repositories>
 
+	<!-- mvn deploy -->
+	<!-- see .m2/settings.xml -->
+
 	<dependencies>
 		<!-- core dependencies -->
-
 		<dependency>
 			<groupId>org.apache.flink</groupId>
 			<artifactId>flink-table-common</artifactId>
