@@ -1,1 +1,3 @@
 cn.guruguru.flink.formats.json.ogg.OggJsonFormatFactory
+
+cn.guruguru.flink.formats.json.array.JsonArrayFormatFactory

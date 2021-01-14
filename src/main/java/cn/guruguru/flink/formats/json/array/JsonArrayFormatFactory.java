@@ -1,9 +1,10 @@
-package cn.guruguru.flink.formats.json.ogg;
+package cn.guruguru.flink.formats.json.array;
 
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.ConfigOption;
+import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.formats.json.JsonOptions;
 import org.apache.flink.formats.json.TimestampFormat;
@@ -18,39 +19,48 @@ import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.table.factories.SerializationFormatFactory;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 支持反序列化（OGG JSON -> RowData）
+ * JSON ARRAY 序列化和反序列化格式工厂
  */
-public class OggJsonFormatFactory implements DeserializationFormatFactory, SerializationFormatFactory {
+public class JsonArrayFormatFactory implements
+        DeserializationFormatFactory,
+        SerializationFormatFactory {
 
-    public static final String IDENTIFIER = "ogg-json";
+    public static final String IDENTIFIER = "json-array";
 
-    // --------------- OGG JSON Options ---------------
+    // --------------- JSON ARRAY Options ---------------
+
+    public static final ConfigOption<Boolean> FAIL_ON_MISSING_FIELD = JsonOptions.FAIL_ON_MISSING_FIELD;
 
     public static final ConfigOption<Boolean> IGNORE_PARSE_ERRORS = JsonOptions.IGNORE_PARSE_ERRORS;
 
     public static final ConfigOption<String> TIMESTAMP_FORMAT = JsonOptions.TIMESTAMP_FORMAT;
 
-    // ----- DeserializationFormatFactory / DecodingFormatFactory -----
+    public static final ConfigOption<Boolean> JACKSON_ACCEPT_SINGLE_VALUE_AS_ARRAY = ConfigOptions
+            .key("jackson.accept-single-value-as-array")
+            .booleanType()
+            .defaultValue(false)
+            .withDescription("Optional flag to accept single value as array instead of failing; false by default");
 
-    /**
-     * 反序列化
-     */
+    // ---------- DeserializationFormatFactory / DecodingFormatFactory ----------
+
     @SuppressWarnings("unchecked")
     @Override
     public DecodingFormat<DeserializationSchema<RowData>> createDecodingFormat(
             DynamicTableFactory.Context context,
             ReadableConfig formatOptions) {
+        // 验证工厂选项，即验证选项的可选和必选
         FactoryUtil.validateFactoryOptions(this, formatOptions);
 
+        // 格式选项
+        TimestampFormat timestampOption = JsonOptions.getTimestampFormat(formatOptions);
+        final boolean failOnMissingField = formatOptions.get(FAIL_ON_MISSING_FIELD);
         final boolean ignoreParseErrors = formatOptions.get(IGNORE_PARSE_ERRORS);
-        TimestampFormat timestampFormatOption = JsonOptions.getTimestampFormat(formatOptions);
+        final Map<String, Boolean> jacksonOptionMap = getJacksonOptionMap(formatOptions);
 
         return new DecodingFormat<DeserializationSchema<RowData>>() {
             @Override
@@ -60,35 +70,30 @@ public class OggJsonFormatFactory implements DeserializationFormatFactory, Seria
                 final RowType rowType = (RowType) producedDataType.getLogicalType();
                 final TypeInformation<RowData> rowDataTypeInfo =
                         (TypeInformation<RowData>) context.createTypeInformation(producedDataType);
-                return new OggJsonDeserializationSchema(
-                        rowType,
-                        rowDataTypeInfo,
-                        ignoreParseErrors,
-                        timestampFormatOption);
+                return new JsonArrayDeserializationSchema(
+                    rowType,
+                    rowDataTypeInfo,
+                    timestampOption,    // 'json-array.timestamp-format.standard'
+                    failOnMissingField, // 'json-array.fail-on-missing-field'
+                    ignoreParseErrors,  // 'json-array.ignore-parse-errors'
+                    jacksonOptionMap    // 'json-array.jackson.*'
+                );
             }
 
             @Override
             public ChangelogMode getChangelogMode() {
-                return ChangelogMode.newBuilder()
-                        .addContainedKind(RowKind.INSERT)
-                        .addContainedKind(RowKind.UPDATE_BEFORE)
-                        .addContainedKind(RowKind.UPDATE_AFTER)
-                        .addContainedKind(RowKind.DELETE)
-                        .build();
+                return ChangelogMode.insertOnly();
             }
         };
     }
 
-    // ----- SerializationFormatFactory / EncodingFormatFactory -----
+    // ---------- SerializationFormatFactory / EncodingFormatFactory ----------
 
-    /**
-     * 不支持序列化
-     */
     @Override
     public EncodingFormat<SerializationSchema<RowData>> createEncodingFormat(
             DynamicTableFactory.Context context,
             ReadableConfig formatOptions) {
-        throw new UnsupportedOperationException("Ogg format doesn't support as a sink format yet.");
+        throw new UnsupportedOperationException("Json array format doesn't support as a sink format yet.");
     }
 
     // -------------------- Factory --------------------
@@ -106,8 +111,26 @@ public class OggJsonFormatFactory implements DeserializationFormatFactory, Seria
     @Override
     public Set<ConfigOption<?>> optionalOptions() {
         Set<ConfigOption<?>> options = new HashSet<>();
-        options.add(IGNORE_PARSE_ERRORS);
+        List<ConfigOption<?>> jacksonOptionList = getJacksonOptionList();
         options.add(TIMESTAMP_FORMAT);
+        options.add(FAIL_ON_MISSING_FIELD);
+        options.add(IGNORE_PARSE_ERRORS);
+        options.addAll(jacksonOptionList);
         return options;
+    }
+
+    // --------------------------------------------------
+
+    private Map<String, Boolean> getJacksonOptionMap(ReadableConfig formatOptions) {
+        Map<String, Boolean> optionMap = new ConcurrentHashMap<>();
+        List<ConfigOption<?>> jacksonOptionList = getJacksonOptionList();
+        jacksonOptionList.forEach(option -> optionMap.put(option.key(), (Boolean) formatOptions.get(option)));
+        return optionMap;
+    }
+
+    private List<ConfigOption<?>> getJacksonOptionList() {
+        return Arrays.asList(
+            JACKSON_ACCEPT_SINGLE_VALUE_AS_ARRAY
+        );
     }
 }

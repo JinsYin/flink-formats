@@ -34,10 +34,12 @@ public class OggJsonDeserializationSchema  implements DeserializationSchema<RowD
     /** Flag indicating whether to ignore invalid fields/rows (default: throw an exception). */
     private final boolean ignoreParseErrors;
 
-    /** Number of fields. */
-    // createJsonRowType() 指定的字段数量
+    /** Number of fields. 即 {@link #createJsonRowType(DataType)} 指定的字段数量 */
     private final int fieldCount;
 
+    /**
+     * {@link JsonRowDataDeserializationSchema#JsonRowDataDeserializationSchema(RowType, TypeInformation, boolean, boolean, TimestampFormat)}
+     */
     public OggJsonDeserializationSchema(
             RowType rowType,
             TypeInformation<RowData> resultTypeInfo,
@@ -63,20 +65,23 @@ public class OggJsonDeserializationSchema  implements DeserializationSchema<RowD
             "Please invoke DeserializationSchema#deserialize(byte[], Collector<RowData>) instead.");
     }
 
+    /**
+     * row = (op_type, before, after)
+     * {@link #createJsonRowType(DataType)}
+     */
     @Override
     public void deserialize(byte[] message, Collector<RowData> out) throws IOException {
         try {
             RowData row = jsonDeserializer.deserialize(message);
-            // 位置取决于 createJsonRowType()
             String opType = row.getString(0).toString(); // "op_type" field
             if (OP_INSERT.equals(opType)) {
-                RowData insert = row.getRow(2, fieldCount); // "after" field, there is no "before" field
+                RowData insert = row.getRow(2, fieldCount); // "after" field. At the same time, the "before" field is null
                 insert.setRowKind(RowKind.INSERT);
                 out.collect(insert);
             } else if (OP_UPDATE.equals(opType)) {
                 // the underlying JSON deserialization schema always produce GenericRowData.
-                GenericRowData before = (GenericRowData) row.getRow(1, fieldCount); // "before" field, it is empty (e.g. '{}')
-                GenericRowData after = (GenericRowData) row.getRow(2, fieldCount); // "after" field
+                GenericRowData before = (GenericRowData) row.getRow(1, fieldCount); // "before" field, it is a empty json
+                GenericRowData after = (GenericRowData) row.getRow(2, fieldCount);  // "after" field
                 for (int f = 0; f < fieldCount; f++) {
                     // "before":{}
                     if (before.isNullAt(f)) {
@@ -91,7 +96,7 @@ public class OggJsonDeserializationSchema  implements DeserializationSchema<RowD
                 out.collect(before);
                 out.collect(after);
             } else if (OP_DELETE.equals(opType)) {
-                RowData delete = row.getRow(1, fieldCount); // "before" field, there is no "after" field
+                RowData delete = row.getRow(1, fieldCount); // "before" field. At the same time, the "after" field is null
                 delete.setRowKind(RowKind.DELETE);
                 out.collect(delete);
             } else {
@@ -153,12 +158,14 @@ public class OggJsonDeserializationSchema  implements DeserializationSchema<RowD
         // OGG JSON contains other information, e.g. "table", "op_ts", "current_ts", "pos"
         // but we don't need them
         return (RowType) DataTypes.ROW(
-                //DataTypes.FIELD("table", DataTypes.STRING()),
-                //DataTypes.FIELD("op_ts", DataTypes.TIME(6)),
-                //DataTypes.FIELD("current_ts", DataTypes.TIME(6)),
-                //DataTypes.FIELD("pos", DataTypes.STRING()),
-                DataTypes.FIELD("op_type", DataTypes.STRING()),
-                DataTypes.FIELD("before", databaseSchema),
-                DataTypes.FIELD("after", databaseSchema)).getLogicalType();
+            // The following annotated fields are not required.
+            // DataTypes.FIELD("table", DataTypes.STRING()),
+            // DataTypes.FIELD("op_ts", DataTypes.TIME(6)),
+            // DataTypes.FIELD("current_ts", DataTypes.TIME(6)),
+            // DataTypes.FIELD("pos", DataTypes.STRING()),
+            DataTypes.FIELD("op_type", DataTypes.STRING()),
+            DataTypes.FIELD("before", databaseSchema),
+            DataTypes.FIELD("after", databaseSchema)
+        ).getLogicalType();
     }
 }
