@@ -18,7 +18,7 @@ import java.util.Objects;
 import static java.lang.String.format;
 import static org.apache.flink.table.types.utils.TypeConversions.fromLogicalToDataType;
 
-public class OggJsonDeserializationSchema  implements DeserializationSchema<RowData>  {
+public class OggJsonDeserializationSchema implements DeserializationSchema<RowData>  {
     private static final long serialVersionUID = 1L;
 
     private static final String OP_INSERT = "I";
@@ -134,6 +134,7 @@ public class OggJsonDeserializationSchema  implements DeserializationSchema<RowD
      */
     @Override
     public boolean equals(Object o) {
+        // 判断引用相等
         if (this == o) {
             return true;
         }
@@ -141,10 +142,11 @@ public class OggJsonDeserializationSchema  implements DeserializationSchema<RowD
             return false;
         }
         OggJsonDeserializationSchema that = (OggJsonDeserializationSchema) o;
+        // 判断值相等
         return ignoreParseErrors == that.ignoreParseErrors &&
                 fieldCount == that.fieldCount &&
-                Objects.equals(jsonDeserializer, that.jsonDeserializer) &&
-                Objects.equals(resultTypeInfo, that.resultTypeInfo);
+                jsonDeserializer.equals(that.jsonDeserializer) &&
+                resultTypeInfo.equals(that.resultTypeInfo);
     }
 
     @Override
