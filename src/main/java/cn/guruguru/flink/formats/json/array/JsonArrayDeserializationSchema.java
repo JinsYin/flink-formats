@@ -24,6 +24,8 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 public class JsonArrayDeserializationSchema implements DeserializationSchema<RowData> {
     private static final long serialVersionUID = 1L;
 
+    public static final String JACKSON_OPTION_PREFIX = "jackson.";
+
     /** Flag indicating whether to fail if a field is missing. */
     private final boolean failOnMissingField;
 
@@ -79,7 +81,7 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
     @Override
     public void open(InitializationContext context) throws Exception {
         jacksonOptionMap.forEach((k, v) -> {
-            String jacksonKey = convertKeyOfConfigOption(k);
+            String jacksonKey = formatKeyOfOption(k, JACKSON_OPTION_PREFIX);
             Arrays.stream(DeserializationFeature.values())
                 .filter(feature -> feature.toString().equals(jacksonKey))
                 .forEach(feature -> objectMapper.configure(feature, v)); // configure(DeserializationFeature.valueOf(jacksonKey), v);
@@ -103,10 +105,8 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
             for (Object object : objects) {
                 // 编组：将 objects 元素逐一编组成 JSON 字符串（byte[] 类型）
                 byte[] message = objectMapper.writeValueAsBytes(object); // throws JsonProcessingException
-
                 // 反序列化：由 JsonRowDataDeserializationSchema 将 JSON 字符串（byte[] 类型）反序列化为 RowData
                 RowData rowData = jsonDeserializer.deserialize(message); // throws IOException
-
                 out.collect(rowData);
             }
         } catch (Throwable t) {
@@ -129,7 +129,7 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
 
     @Override
     public TypeInformation<RowData> getProducedType() {
-        return null;
+        return resultTypeInfo;
     }
 
     // -------------------- Object --------------------
@@ -157,16 +157,19 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
         return Objects.hash(failOnMissingField, ignoreParseErrors, resultTypeInfo, timestampFormat);
     }
 
-    // ----------------------------------------
+    // ------------------------------------------
 
     /**
-     * @param keyOfConfigOption 'jackson.accept-single-value-as-array'
+     * @param key 'jackson.accept-single-value-as-array'
      * @return 'ACCEPT_SINGLE_VALUE_AS_ARRAY'
      */
-    private String convertKeyOfConfigOption(String keyOfConfigOption) {
-        if (keyOfConfigOption.startsWith("jackson.")) {
-            return keyOfConfigOption.substring(8).replaceAll("-", "_").toUpperCase();
+    private String formatKeyOfOption(String key, String prefix) {
+        if (key.startsWith(prefix)) {
+            return key
+                    .substring(prefix.length())
+                    .replaceAll("-", "_")
+                    .toUpperCase();
         }
-        return keyOfConfigOption;
+        return key;
     }
 }

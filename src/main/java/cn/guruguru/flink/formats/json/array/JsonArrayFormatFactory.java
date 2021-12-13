@@ -32,7 +32,7 @@ public class JsonArrayFormatFactory implements
 
     public static final String IDENTIFIER = "json-array";
 
-    // --------------- JSON ARRAY Options ---------------
+    // --------------- JSON ARRAY Options -----------------
 
     public static final ConfigOption<Boolean> FAIL_ON_MISSING_FIELD = JsonOptions.FAIL_ON_MISSING_FIELD;
 
@@ -40,13 +40,16 @@ public class JsonArrayFormatFactory implements
 
     public static final ConfigOption<String> TIMESTAMP_FORMAT = JsonOptions.TIMESTAMP_FORMAT;
 
+    /**
+     * {@link org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.DeserializationFeature}
+     */
     public static final ConfigOption<Boolean> JACKSON_ACCEPT_SINGLE_VALUE_AS_ARRAY = ConfigOptions
             .key("jackson.accept-single-value-as-array")
             .booleanType()
             .defaultValue(false)
             .withDescription("Optional flag to accept single value as array instead of failing; false by default");
 
-    // ---------- DeserializationFormatFactory / DecodingFormatFactory ----------
+    // --------- DeserializationFormatFactory / DecodingFormatFactory ---------
 
     @SuppressWarnings("unchecked")
     @Override
