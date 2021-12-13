@@ -18,7 +18,15 @@ under the License.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
 	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.apache.flink</groupId>
+		<artifactId>flink-formats</artifactId>
+		<version>1.11.1</version>
+		<relativePath/>
+	</parent>
 
 	<groupId>cn.guruguru</groupId>
 	<artifactId>flink-formats</artifactId>
@@ -35,7 +43,6 @@ under the License.
 		<scala.binary.version>2.11</scala.binary.version>
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
-		<log4j.version>2.12.1</log4j.version>
 		<jackson.verion>2.10.1-11.0</jackson.verion>
 	</properties>
 
@@ -76,7 +83,7 @@ under the License.
 		<!-- test utils dependency -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
-			<artifactId>flink-test-utils_${scala.binary.version}</artifactId>
+			<artifactId>flink-test-utils-junit</artifactId>
 			<version>${flink.version}</version>
 			<scope>test</scope>
 		</dependency>
