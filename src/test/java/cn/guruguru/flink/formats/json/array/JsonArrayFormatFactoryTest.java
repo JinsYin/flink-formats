@@ -54,6 +54,7 @@ public class JsonArrayFormatFactoryTest extends TestLogger {
                 TimestampFormat.ISO_8601,
                 false,
                 true,
+                true,
                 jacksonOptionMap);
 
         final Map<String, String> options = getAllOptions();
@@ -110,6 +111,7 @@ public class JsonArrayFormatFactoryTest extends TestLogger {
         options.put("format", "json-array");
         options.put("json-array.fail-on-missing-field", "false");
         options.put("json-array.ignore-parse-errors", "true");
+        options.put("json-array.remove-duplicates", "true");
         options.put("json-array.timestamp-format.standard", "ISO-8601");
         return options;
     }

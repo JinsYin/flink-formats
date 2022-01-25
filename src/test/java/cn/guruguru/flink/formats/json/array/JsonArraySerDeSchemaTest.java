@@ -65,6 +65,8 @@ public class JsonArraySerDeSchemaTest {
 
     @Test
     public void testDeserialize() throws Exception {
+        boolean removeDuplicatesForArray = true;
+
         byte tinyint = 'c';
         short smallint = 128;
         int intValue = 45536;
@@ -126,8 +128,8 @@ public class JsonArraySerDeSchemaTest {
         objectNode2.putObject("map").put("flink", 123);
         objectNode2.putObject("map2map").putObject("inner_map").put("key", 234);
 
-        // 模拟 JSON 数组
-        ArrayNode arrayNode = objectMapper.createArrayNode().add(objectNode1).add(objectNode2);
+        // 模拟 JSON 数组（包含重复元素）
+        ArrayNode arrayNode = objectMapper.createArrayNode().add(objectNode1).add(objectNode2).add(objectNode2);
 
         byte[] serializedJsonArray = objectMapper.writeValueAsBytes(arrayNode);
 
@@ -158,7 +160,8 @@ public class JsonArraySerDeSchemaTest {
         jacksonOptionMap.put(JACKSON_ACCEPT_SINGLE_VALUE_AS_ARRAY.key(), false);
 
         JsonArrayDeserializationSchema deserializationSchema = new JsonArrayDeserializationSchema(
-                rowType, resultTypeInfo,  TimestampFormat.ISO_8601,false, false,  jacksonOptionMap);
+                rowType, resultTypeInfo,  TimestampFormat.ISO_8601,
+                false, false, removeDuplicatesForArray, jacksonOptionMap);
 
         // 对应于 SQL 的 ROW 类型，外部数据类型
         Row expectedRow1 = new Row(16);
@@ -197,7 +200,9 @@ public class JsonArraySerDeSchemaTest {
         expectedRow2.setField(14, map);
         expectedRow2.setField(15, nestedMap);
 
-        Row[] expectedRowArray = new Row[]{expectedRow1, expectedRow2};
+        Row[] expectedRowArray = new Row[]{expectedRow1, expectedRow2, expectedRow2};
+        if (removeDuplicatesForArray) expectedRowArray = new Row[]{expectedRow1, expectedRow2};
+        Row[] finalExpectedRowArray = expectedRowArray;
 
         deserializationSchema.deserialize(serializedJsonArray, new Collector<RowData>() {
             int idx = 0;
@@ -206,7 +211,7 @@ public class JsonArraySerDeSchemaTest {
             public void collect(RowData rowData) {
                 // test deserialization
                 Row actual = convertToExternal(rowData, dataType);
-                assertEquals(expectedRowArray[idx], actual);
+                assertEquals(finalExpectedRowArray[idx], actual);
 
                 // test serialization
                 JsonRowDataSerializationSchema serializationSchema = new JsonRowDataSerializationSchema(rowType,  TimestampFormat.ISO_8601);

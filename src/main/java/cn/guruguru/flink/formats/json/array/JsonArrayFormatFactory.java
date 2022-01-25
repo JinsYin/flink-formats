@@ -34,11 +34,17 @@ public class JsonArrayFormatFactory implements
 
     // --------------- JSON ARRAY Options -----------------
 
+    public static final ConfigOption<String> TIMESTAMP_FORMAT = JsonOptions.TIMESTAMP_FORMAT;
+
     public static final ConfigOption<Boolean> FAIL_ON_MISSING_FIELD = JsonOptions.FAIL_ON_MISSING_FIELD;
 
     public static final ConfigOption<Boolean> IGNORE_PARSE_ERRORS = JsonOptions.IGNORE_PARSE_ERRORS;
 
-    public static final ConfigOption<String> TIMESTAMP_FORMAT = JsonOptions.TIMESTAMP_FORMAT;
+    public static final ConfigOption<Boolean> REMOVE_DUPLICATES = ConfigOptions
+            .key("remove-duplicates")
+            .booleanType()
+            .defaultValue(false)
+            .withDescription("Optional flag to remove duplicate elements for json array");
 
     /**
      * {@link org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.DeserializationFeature}
@@ -63,6 +69,7 @@ public class JsonArrayFormatFactory implements
         TimestampFormat timestampOption = JsonOptions.getTimestampFormat(formatOptions);
         final boolean failOnMissingField = formatOptions.get(FAIL_ON_MISSING_FIELD);
         final boolean ignoreParseErrors = formatOptions.get(IGNORE_PARSE_ERRORS);
+        final boolean removeDuplicates = formatOptions.get(REMOVE_DUPLICATES);
         final Map<String, Boolean> jacksonOptionMap = getJacksonOptionMap(formatOptions);
 
         return new DecodingFormat<DeserializationSchema<RowData>>() {
@@ -79,6 +86,7 @@ public class JsonArrayFormatFactory implements
                     timestampOption,    // 'json-array.timestamp-format.standard'
                     failOnMissingField, // 'json-array.fail-on-missing-field'
                     ignoreParseErrors,  // 'json-array.ignore-parse-errors'
+                    removeDuplicates,   // 'json-array.remove-duplicates'
                     jacksonOptionMap    // 'json-array.jackson.*'
                 );
             }
@@ -118,6 +126,7 @@ public class JsonArrayFormatFactory implements
         options.add(TIMESTAMP_FORMAT);
         options.add(FAIL_ON_MISSING_FIELD);
         options.add(IGNORE_PARSE_ERRORS);
+        options.add(REMOVE_DUPLICATES);
         options.addAll(jacksonOptionList);
         return options;
     }

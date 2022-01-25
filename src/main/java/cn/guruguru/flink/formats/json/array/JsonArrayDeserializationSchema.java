@@ -12,6 +12,7 @@ import org.apache.flink.util.Collector;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -31,6 +32,9 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
 
     /** Flag indicating whether to ignore invalid fields/rows (default: throw an exception). */
     private final boolean ignoreParseErrors;
+
+    /** Flag indicating whether to remove duplicates for json array. */
+    private final boolean removeDuplicates;
 
     /** Timestamp format specification which is used to parse timestamp. */
     private final TimestampFormat timestampFormat;
@@ -54,6 +58,7 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
             TimestampFormat timestampFormat,
             boolean failOnMissingField,
             boolean ignoreParseErrors,
+            boolean removeDuplicates,
             Map<String, Boolean> jacksonOptionMap) {
         if (ignoreParseErrors && failOnMissingField) {
             throw new IllegalArgumentException(
@@ -63,6 +68,7 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
         this.timestampFormat = timestampFormat;        // 'json-array.timestamp-format.standard'
         this.failOnMissingField = failOnMissingField;  // 'json-array.fail-on-missing-field'
         this.ignoreParseErrors = ignoreParseErrors;    // 'json-array.ignore-parse-errors'
+        this.removeDuplicates = removeDuplicates;      // 'json-array.remove-duplicates'
         this.jacksonOptionMap = jacksonOptionMap;      // 'json-array.jackson.*'
         this.jsonDeserializer = new JsonRowDataDeserializationSchema(
             rowType,
@@ -91,8 +97,13 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
     /**
      * 将 JSON 数组字符串转化成 JSON 字符串数组，再逐一反序列化成 RowData
      *
-     * 注： Jackson 无法一步完成 JSON 数组字符串转化成 JSON 字符串数组
+     * 注：
+     *
+     * 1. Jackson 无法一步完成 JSON 数组字符串转化成 JSON 字符串数组
      *     即 String[] jsonStrArray = objectMapper.readValue(messages, String[].class)
+     * 2. 没有使用 `Arrays.stream(objects).map(this::deserializeToRowData).filter(Objects::nonNull).distinct().forEach(out::collect);`
+     *    进行去重，是因为 Lambda 中必须处理在中间的算子中处理完异常，而实际需要统一处理 JSON 数组及其元素的相关异常
+     *
      *
      * @param messages serialized JSON array
      */
@@ -101,14 +112,29 @@ public class JsonArrayDeserializationSchema implements DeserializationSchema<Row
         try {
             // 解组：将 JSON 数组字符串转化成 Object 数组，每个数组元素是一个 JSON 对象
             Object[] objects = objectMapper.readValue(messages, Object[].class); // throws some exceptions
+            // 存放出现过的元素
+            HashMap<Integer, RowData> map = new HashMap<>();
 
             for (Object object : objects) {
                 // 编组：将 objects 元素逐一编组成 JSON 字符串（byte[] 类型）
                 byte[] message = objectMapper.writeValueAsBytes(object); // throws JsonProcessingException
                 // 反序列化：由 JsonRowDataDeserializationSchema 将 JSON 字符串（byte[] 类型）反序列化为 RowData
                 RowData rowData = jsonDeserializer.deserialize(message); // throws IOException
-                out.collect(rowData);
+
+                if (removeDuplicates) {
+                    // 如果还没有出现过则进行收集
+                    if (map.get(rowData.hashCode()) == null) {
+                        out.collect(rowData);
+                    }
+                    map.put(rowData.hashCode(), rowData);
+                } else {
+                    // 逐一收集
+                    out.collect(rowData);
+                }
             }
+
+            // 清空
+            map.clear();
         } catch (Throwable t) {
             if (!ignoreParseErrors) {
                 throw new IOException(format("Failed to deserialize JSON array '%s'.", new String(messages)), t);
